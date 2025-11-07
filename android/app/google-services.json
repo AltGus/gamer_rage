@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "765416554245",
+    "project_id": "gamer-rage",
+    "storage_bucket": "gamer-rage.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765416554245:android:6199cbe4d9ef344f5ac16c",
+        "android_client_info": {
+          "package_name": "com.example.gamer_rage"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIS8n1s2peA89s9BaIMZamLwDGwu_f1KI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
