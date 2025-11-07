@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:gamer_rage/src/data/models/game_model.dart';
 import 'package:gamer_rage/src/data/services/game_api_service.dart';
 import 'package:gamer_rage/src/presentation/pages/game_details_page.dart';
+import 'package:gamer_rage/src/presentation/widgets/hover_image.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -43,7 +44,8 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.black87,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.deepPurple))
           : RefreshIndicator(
               onRefresh: _fetchPopularGames,
               child: SingleChildScrollView(
@@ -52,7 +54,8 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Text(
                         '🔥 Jogos Populares',
                         style: TextStyle(
@@ -75,7 +78,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 30),
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Text(
                         '🎮 Últimas Avaliações de Amigos',
                         style: TextStyle(
@@ -126,20 +130,18 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Image.network(
-                game.headerImage,
-                width: 180,
-                height: 120,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 180,
-                  height: 120,
-                  color: Colors.grey[900],
-                  child: const Icon(Icons.videogame_asset, color: Colors.white70, size: 40),
-                ),
-              ),
+            HoverImage(
+              imageUrl: game.headerImage,
+              width: 180,
+              height: 120,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => GameDetailsPage(game: game)),
+                );
+              },
             ),
             Padding(
               padding: const EdgeInsets.all(8),
@@ -177,10 +179,14 @@ class _HomePageState extends State<HomePage> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
                   ),
-                  child: const Text("Detalhes", style: TextStyle(fontSize: 12)),
+                  child:
+                      const Text("Detalhes", style: TextStyle(fontSize: 12)),
                 ),
               ),
             ),
