@@ -47,6 +47,7 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
   Future<void> _submitReview() async {
     if (user == null) return;
     final comment = _commentController.text.trim();
+
     if (_rating == 0 || comment.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Dê uma nota e escreva um comentário.')),
@@ -54,10 +55,16 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
       return;
     }
 
+    // ✅ Corrigido: Mapa de dados da avaliação sem duplicatas
     final reviewData = {
       'userId': user!.uid,
       'userEmail': user!.email,
       'userName': user!.displayName ?? 'Usuário',
+      'gameId': widget.game.appId.toString(),
+      'gameName': widget.game.name.isNotEmpty ? widget.game.name : 'Sem título',
+      'gameImage': widget.game.headerImage.isNotEmpty
+          ? widget.game.headerImage
+          : 'https://placehold.co/400x200/000000/FFFFFF?text=Sem+Imagem',
       'rating': _rating,
       'comment': comment,
       'timestamp': FieldValue.serverTimestamp(),
@@ -82,7 +89,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
     }
   }
 
-  /// 🔹 Seguir ou deixar de seguir outro usuário
   Future<void> _toggleFollow(String targetUserId) async {
     if (user == null || user!.uid == targetUserId) return;
 
@@ -94,13 +100,12 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
 
     final doc = await followRef.get();
     if (doc.exists) {
-      await followRef.delete(); // deixar de seguir
+      await followRef.delete();
     } else {
-      await followRef.set({'since': FieldValue.serverTimestamp()}); // seguir
+      await followRef.set({'since': FieldValue.serverTimestamp()});
     }
   }
 
-  /// 🔹 Verifica se o usuário atual segue outro usuário
   Stream<bool> _isFollowing(String targetUserId) {
     if (user == null) return const Stream.empty();
     return FirebaseFirestore.instance
@@ -140,7 +145,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
               ),
             ),
             const SizedBox(height: 20),
-
             Text(
               game.name,
               style: const TextStyle(
@@ -150,7 +154,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
               ),
             ),
             const SizedBox(height: 10),
-
             Text(
               game.description?.isNotEmpty == true
                   ? game.description!
@@ -158,17 +161,16 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
               style: const TextStyle(color: Colors.white70, height: 1.5),
             ),
             const SizedBox(height: 20),
-
             const Text('Sua Avaliação:',
                 style: TextStyle(color: Colors.white, fontSize: 18)),
             const SizedBox(height: 10),
-
             Wrap(
               spacing: 4,
               children: List.generate(10, (index) {
                 final starIndex = index + 1;
                 return IconButton(
-                  onPressed: () => setState(() => _rating = starIndex.toDouble()),
+                  onPressed: () =>
+                      setState(() => _rating = starIndex.toDouble()),
                   icon: Icon(
                     Icons.star,
                     color: _rating >= starIndex ? Colors.amber : Colors.white24,
@@ -178,7 +180,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
               }),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _commentController,
               maxLines: 3,
@@ -194,7 +195,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
               ),
             ),
             const SizedBox(height: 10),
-
             Center(
               child: ElevatedButton.icon(
                 onPressed: _submitReview,
@@ -204,20 +204,18 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
                 ),
               ),
             ),
             const SizedBox(height: 30),
-
             const Divider(color: Colors.white24),
             const Text(
               'Avaliações dos jogadores:',
               style: TextStyle(color: Colors.white, fontSize: 18),
             ),
             const SizedBox(height: 10),
-
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('reviews')

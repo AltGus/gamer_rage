@@ -83,12 +83,32 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                   itemCount: _results.length,
                   itemBuilder: (context, index) {
                     final game = _results[index];
-                    return ListTile(
-                      leading: HoverImage(
-                        imageUrl: game.headerImage,
-                        width: 70,
-                        height: 40,
-                        borderRadius: BorderRadius.circular(6),
+                    return Card(
+                      color: Colors.white10,
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: ListTile(
+                        leading: HoverImage(
+                          imageUrl: game.headerImage,
+                          width: 90,
+                          height: 60,
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => GameDetailsPage(game: game),
+                              ),
+                            );
+                          },
+                        ),
+                        title: Text(
+                          game.name,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          game.price ?? "N/A",
+                          style: const TextStyle(color: Colors.greenAccent),
+                        ),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -98,18 +118,6 @@ class _SearchResultsPageState extends State<SearchResultsPage> {
                           );
                         },
                       ),
-                      title: Text(
-                        game.name,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GameDetailsPage(game: game),
-                          ),
-                        );
-                      },
                     );
                   },
                 ),

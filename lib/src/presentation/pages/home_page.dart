@@ -38,13 +38,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 🔹 Stream das avaliações dos amigos que o usuário segue
   Stream<List<Map<String, dynamic>>> _getFollowerReviews() async* {
     if (user == null) {
       yield [];
       return;
     }
 
-    // 🔹 Busca IDs das pessoas que o usuário segue
     final followingSnap = await FirebaseFirestore.instance
         .collection('followers')
         .doc(user!.uid)
@@ -52,12 +52,12 @@ class _HomePageState extends State<HomePage> {
         .get();
 
     final followingIds = followingSnap.docs.map((d) => d.id).toList();
+
     if (followingIds.isEmpty) {
       yield [];
       return;
     }
 
-    // 🔹 Escuta todas as avaliações (limite de 10 IDs por query)
     yield* FirebaseFirestore.instance
         .collectionGroup('comments')
         .where(
@@ -72,47 +72,59 @@ class _HomePageState extends State<HomePage> {
             snap.docs.map((d) => d.data() as Map<String, dynamic>).toList());
   }
 
-  // Adiciona função para abrir página do jogo a partir dos dados da avaliação.
-  void _openGameFromReview(Map<String, dynamic> data) {
-    // Tenta identificar o jogo pela maior quantidade de possibilidades
-    final dynamic possibleId = data['gameId'] ?? data['id'] ?? data['appId'];
-    final String? possibleName =
-        (data['gameName'] ?? data['gameTitle'] ?? data['title'])?.toString();
+  /// 🔹 Busca e valida o jogo de uma avaliação
+  Future<GameModel?> _resolveGame(Map<String, dynamic> data) async {
+    final possibleId = data['gameId']?.toString();
+    final possibleName =
+        data['gameName']?.toString() ?? data['title']?.toString();
 
     GameModel? found;
 
-    // Tenta encontrar pelo id entre os populares
-    if (possibleId != null) {
-      try {
-        found = _popularGames.firstWhere((g) {
-          // evita acessar getters que não existem no model
-          final gid = (g.appId ?? '').toString();
-          return gid.isNotEmpty && gid == possibleId.toString();
-        });
-      } catch (_) {
-        // não encontrado por id
-      }
+    // Busca por ID nos jogos já carregados
+    if (possibleId != null && possibleId.isNotEmpty) {
+      found = _popularGames
+          .where((g) => g.appId.toString() == possibleId)
+          .cast<GameModel?>()
+          .firstWhere((g) => g != null, orElse: () => null);
     }
 
-    // Se não achou por id, tenta por nome (case-insensitive)
-    if (found == null && possibleName != null) {
-      try {
-        found = _popularGames.firstWhere((g) =>
-            g.name.toLowerCase() == possibleName.toLowerCase());
-      } catch (_) {
-        // não encontrado por nome
-      }
+    // Busca por nome, se ID não achou
+    if (found == null && possibleName != null && possibleName.isNotEmpty) {
+      found = _popularGames.firstWhere(
+        (g) => g.name.toLowerCase() == possibleName.toLowerCase(),
+        orElse: () => GameModel(
+          appId: 0,
+          name: possibleName,
+          headerImage:
+              data['gameImage'] ?? 'https://placehold.co/400x200?text=Imagem',
+          description: '',
+          developer: '',
+          publisher: '',
+          price: 'N/A',
+          initialPrice: 0.0,
+        ),
+      );
     }
 
+    // Busca na API se não encontrou localmente
+    if (found == null && possibleId != null) {
+      found = await _gameApi.getGameByAppId(possibleId);
+    }
+
+    return found;
+  }
+
+  /// 🔹 Abre a página de detalhes do jogo a partir de uma avaliação
+  Future<void> _openGameFromReview(Map<String, dynamic> data) async {
+    final found = await _resolveGame(data);
     if (found != null) {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => GameDetailsPage(game: found!)),
       );
     } else {
-      // Se não estiver nos populares, informa e sugere abrir página de busca (extensível)
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Jogo não encontrado nos populares.')),
+        const SnackBar(content: Text('Jogo não encontrado.')),
       );
     }
   }
@@ -126,7 +138,9 @@ class _HomePageState extends State<HomePage> {
         backgroundColor: Colors.black87,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.deepPurple))
+          ? const Center(
+              child: CircularProgressIndicator(color: Colors.deepPurple),
+            )
           : RefreshIndicator(
               onRefresh: _fetchPopularGames,
               child: SingleChildScrollView(
@@ -135,7 +149,8 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Text(
                         '🔥 Jogos Populares',
                         style: TextStyle(
@@ -158,7 +173,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 30),
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Text(
                         '👥 Avaliações dos que você segue',
                         style: TextStyle(
@@ -171,11 +187,13 @@ class _HomePageState extends State<HomePage> {
                     StreamBuilder<List<Map<String, dynamic>>>(
                       stream: _getFollowerReviews(),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
                           return const Center(
                             child: Padding(
                               padding: EdgeInsets.all(16),
-                              child: CircularProgressIndicator(color: Colors.deepPurple),
+                              child: CircularProgressIndicator(
+                                  color: Colors.deepPurple),
                             ),
                           );
                         }
@@ -195,37 +213,48 @@ class _HomePageState extends State<HomePage> {
                         final reviews = snapshot.data!;
                         return Column(
                           children: reviews.take(10).map((data) {
-                            // tenta extrair nome do jogo para mostrar e linkar
-                            final String gameName = (data['gameName'] ?? data['gameTitle'] ?? data['title'] ?? 'Jogo desconhecido').toString();
+                            final String gameName =
+                                (data['gameName'] ?? 'Jogo desconhecido')
+                                    .toString();
+                            final String? imageUrl = data['gameImage'];
 
                             return Card(
                               color: Colors.white10,
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
                               child: ListTile(
-                                // Mostra o nome do jogo como link clicável
-                                title: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    InkWell(
-                                      onTap: () => _openGameFromReview(data),
-                                      child: Text(
-                                        gameName,
-                                        style: const TextStyle(
-                                          color: Colors.lightBlueAccent,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                contentPadding: const EdgeInsets.all(8),
+                                leading: GestureDetector(
+                                  onTap: () => _openGameFromReview(data),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      imageUrl ??
+                                          'https://placehold.co/100x60/000000/FFFFFF?text=Sem+Imagem',
+                                      width: 80,
+                                      height: 50,
+                                      fit: BoxFit.cover,
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      'Avaliação de ${data['userName'] ?? 'Usuário'}:',
-                                      style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                                title: InkWell(
+                                  onTap: () => _openGameFromReview(data),
+                                  child: Text(
+                                    gameName,
+                                    style: const TextStyle(
+                                      color: Colors.lightBlueAccent,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                  ],
+                                  ),
                                 ),
                                 subtitle: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Text(
+                                      'Avaliação de ${data['userName'] ?? 'Usuário'}:',
+                                      style: const TextStyle(
+                                          color: Colors.white),
+                                    ),
                                     const SizedBox(height: 6),
                                     Row(
                                       children: List.generate(
@@ -233,7 +262,9 @@ class _HomePageState extends State<HomePage> {
                                         (i) => Icon(
                                           Icons.star,
                                           size: 16,
-                                          color: i < ((data['rating'] ?? 0).toInt())
+                                          color: i <
+                                                  ((data['rating'] ?? 0)
+                                                      .toInt())
                                               ? Colors.amber
                                               : Colors.white24,
                                         ),
@@ -242,11 +273,11 @@ class _HomePageState extends State<HomePage> {
                                     const SizedBox(height: 4),
                                     Text(
                                       data['comment'] ?? '',
-                                      style: const TextStyle(color: Colors.white70),
+                                      style: const TextStyle(
+                                          color: Colors.white70),
                                     ),
                                   ],
                                 ),
-                                onTap: () => _openGameFromReview(data),
                               ),
                             );
                           }).toList(),
@@ -289,7 +320,8 @@ class _HomePageState extends State<HomePage> {
               imageUrl: game.headerImage,
               width: 180,
               height: 120,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               onTap: () {
                 Navigator.push(
                   context,
