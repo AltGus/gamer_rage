@@ -7,7 +7,7 @@ import 'package:gamer_rage/src/presentation/widgets/universal_appbar.dart';
 /// 🧭 AppShell — estrutura principal do app autenticado.
 /// Contém a [UniversalAppBar] com busca global e navegação entre páginas.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({Key? key}) : super(key: key);
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -15,7 +15,6 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
-
   late final List<Widget> _pages;
 
   @override

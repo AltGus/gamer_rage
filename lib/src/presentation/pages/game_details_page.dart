@@ -1,11 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:gamer_rage/src/data/models/game_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:gamer_rage/src/data/models/game_model.dart';
 
 class GameDetailsPage extends StatefulWidget {
   final GameModel game;
-
   const GameDetailsPage({super.key, required this.game});
 
   @override
@@ -15,11 +14,38 @@ class GameDetailsPage extends StatefulWidget {
 class _GameDetailsPageState extends State<GameDetailsPage> {
   double _rating = 0;
   final TextEditingController _commentController = TextEditingController();
+  String? _reviewId;
+  final user = FirebaseAuth.instance.currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserReview();
+  }
+
+  Future<void> _loadUserReview() async {
+    if (user == null) return;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.game.appId.toString())
+        .collection('comments')
+        .where('userId', isEqualTo: user!.uid)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      final doc = snapshot.docs.first;
+      final data = doc.data();
+      setState(() {
+        _reviewId = doc.id;
+        _rating = (data['rating'] ?? 0).toDouble();
+        _commentController.text = data['comment'] ?? '';
+      });
+    }
+  }
 
   Future<void> _submitReview() async {
-    final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final comment = _commentController.text.trim();
     if (_rating == 0 || comment.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -28,23 +54,62 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
       return;
     }
 
-    await FirebaseFirestore.instance
-        .collection('reviews')
-        .doc(widget.game.appId.toString())
-        .collection('comments')
-        .add({
-      'userId': user.uid,
-      'userName': user.displayName ?? 'Usuário',
+    final reviewData = {
+      'userId': user!.uid,
+      'userEmail': user!.email,
+      'userName': user!.displayName ?? 'Usuário',
       'rating': _rating,
       'comment': comment,
       'timestamp': FieldValue.serverTimestamp(),
-    });
+    };
 
-    _commentController.clear();
-    setState(() => _rating = 0);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Avaliação enviada!')),
-    );
+    final ref = FirebaseFirestore.instance
+        .collection('reviews')
+        .doc(widget.game.appId.toString())
+        .collection('comments');
+
+    if (_reviewId != null) {
+      await ref.doc(_reviewId).update(reviewData);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avaliação atualizada!')),
+      );
+    } else {
+      final newDoc = await ref.add(reviewData);
+      setState(() => _reviewId = newDoc.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Avaliação enviada!')),
+      );
+    }
+  }
+
+  /// 🔹 Seguir ou deixar de seguir outro usuário
+  Future<void> _toggleFollow(String targetUserId) async {
+    if (user == null || user!.uid == targetUserId) return;
+
+    final followRef = FirebaseFirestore.instance
+        .collection('followers')
+        .doc(user!.uid)
+        .collection('following')
+        .doc(targetUserId);
+
+    final doc = await followRef.get();
+    if (doc.exists) {
+      await followRef.delete(); // deixar de seguir
+    } else {
+      await followRef.set({'since': FieldValue.serverTimestamp()}); // seguir
+    }
+  }
+
+  /// 🔹 Verifica se o usuário atual segue outro usuário
+  Stream<bool> _isFollowing(String targetUserId) {
+    if (user == null) return const Stream.empty();
+    return FirebaseFirestore.instance
+        .collection('followers')
+        .doc(user!.uid)
+        .collection('following')
+        .doc(targetUserId)
+        .snapshots()
+        .map((doc) => doc.exists);
   }
 
   @override
@@ -66,7 +131,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🖼️ Imagem de capa
             ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.network(
@@ -77,7 +141,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 20),
 
-            // 🎮 Nome
             Text(
               game.name,
               style: const TextStyle(
@@ -88,7 +151,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 10),
 
-            // 💬 Descrição
             Text(
               game.description?.isNotEmpty == true
                   ? game.description!
@@ -97,12 +159,10 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 20),
 
-            // ⭐ Avaliação
-            const Text(
-              'Avalie este jogo:',
-              style: TextStyle(color: Colors.white, fontSize: 18),
-            ),
+            const Text('Sua Avaliação:',
+                style: TextStyle(color: Colors.white, fontSize: 18)),
             const SizedBox(height: 10),
+
             Wrap(
               spacing: 4,
               children: List.generate(10, (index) {
@@ -111,9 +171,7 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
                   onPressed: () => setState(() => _rating = starIndex.toDouble()),
                   icon: Icon(
                     Icons.star,
-                    color: _rating >= starIndex
-                        ? Colors.amber
-                        : Colors.white24,
+                    color: _rating >= starIndex ? Colors.amber : Colors.white24,
                     size: 28,
                   ),
                 );
@@ -121,7 +179,6 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 10),
 
-            // 📝 Campo de comentário
             TextField(
               controller: _commentController,
               maxLines: 3,
@@ -138,12 +195,13 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 10),
 
-            // 🚀 Botão de enviar
             Center(
               child: ElevatedButton.icon(
                 onPressed: _submitReview,
                 icon: const Icon(Icons.send),
-                label: const Text('Enviar Avaliação'),
+                label: Text(
+                  _reviewId != null ? 'Atualizar Avaliação' : 'Enviar Avaliação',
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.deepPurple,
                   padding:
@@ -153,10 +211,9 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
             ),
             const SizedBox(height: 30),
 
-            // 💬 Lista de avaliações
             const Divider(color: Colors.white24),
             const Text(
-              'Avaliações de outros jogadores:',
+              'Avaliações dos jogadores:',
               style: TextStyle(color: Colors.white, fontSize: 18),
             ),
             const SizedBox(height: 10),
@@ -169,32 +226,55 @@ class _GameDetailsPageState extends State<GameDetailsPage> {
                   .orderBy('timestamp', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (!snapshot.hasData) {
                   return const Center(
-                    child:
-                        CircularProgressIndicator(color: Colors.deepPurple),
+                    child: CircularProgressIndicator(color: Colors.deepPurple),
                   );
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                final reviews = snapshot.data!.docs;
+                if (reviews.isEmpty) {
                   return const Text(
                     'Nenhuma avaliação ainda. Seja o primeiro!',
                     style: TextStyle(color: Colors.white54),
                   );
                 }
 
-                final reviews = snapshot.data!.docs;
-
                 return Column(
                   children: reviews.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
+                    final targetUserId = data['userId'] ?? '';
                     return Card(
                       color: Colors.white10,
                       margin: const EdgeInsets.symmetric(vertical: 8),
                       child: ListTile(
-                        title: Text(
-                          data['userName'] ?? 'Usuário',
-                          style: const TextStyle(color: Colors.white),
+                        title: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              data['userName'] ?? 'Usuário',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            if (user != null && user!.uid != targetUserId)
+                              StreamBuilder<bool>(
+                                stream: _isFollowing(targetUserId),
+                                builder: (context, snapshot) {
+                                  final isFollowing = snapshot.data ?? false;
+                                  return TextButton(
+                                    onPressed: () =>
+                                        _toggleFollow(targetUserId),
+                                    child: Text(
+                                      isFollowing ? 'Seguindo' : 'Seguir',
+                                      style: TextStyle(
+                                        color: isFollowing
+                                            ? Colors.greenAccent
+                                            : Colors.blueAccent,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
